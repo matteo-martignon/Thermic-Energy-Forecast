@@ -76,7 +76,9 @@ def clear_columns(columns):
     "Previsioni_radiazione": "previsioni_radiazione",
     "Precipitazioni (mm)": "precipitazioni(mm)",
     "Pressione (bar)": "pressione(bar)",
-    "Umidita (%)": "umidita(%)"}
+    "Umidita (%)": "umidita(%)",
+    "Temperatura": "temperatura", 
+    "Previsioni_Temperatura": "previsioni_temperatura"}
     
     columns = list(columns)
     l = []
@@ -85,6 +87,16 @@ def clear_columns(columns):
             column = column.replace(k,v)
         l.append(column)
     return l
+
+def process_PrevisioniTemperatura(df):
+    df_temp = df.drop(columns=["IdPrevisione","FornitorePrevisioni","DataEmissione"]).melt(id_vars=["DataPrevisione"], 
+        var_name="Orarii", 
+        value_name="Temperatura")
+    df_temp["Orarii"] = df_temp["Orarii"].apply(lambda x: x[4:6])
+    df_temp["datetime"] = df_temp["DataPrevisione"]+ ' ' +df_temp["Orarii"]
+    df_temp["datetime"] = pd.to_datetime(df_temp["datetime"], format="%d/%m/%Y %H")
+    df_temp = df_temp.set_index("datetime")[["Temperatura"]].loc["2014":].resample('H').last()
+    return df_temp
 
 def get_data(path):
     '''
@@ -121,7 +133,11 @@ def get_data(path):
         df[k].columns = df[k].columns + f" ({k})"
         df[k].columns = clear_columns(df[k].columns)
     
-    for k in dt_columns.keys():
+    df["PrevisioniTemperatura"] = process_PrevisioniTemperatura(df["PrevisioniTemperatura"])
+    df["PrevisioniTemperatura"].columns = df["PrevisioniTemperatura"].columns + " (Previsioni_Temperatura)"
+    df["PrevisioniTemperatura"].columns = clear_columns(df["PrevisioniTemperatura"].columns)
+    
+    for k in datasets:
         if 'df_merge' not in locals():
             df_merge = df[k]
         else:
@@ -131,3 +147,13 @@ def get_data(path):
 def get_soup(url):
     response = requests.get(url)
     return BeautifulSoup(response.content, features='html.parser')
+
+def get_temperature_data(path):
+    df_temp = pd.read_json(path, orient = 'index')
+    df_temp.index = pd.to_datetime(df_temp.index)
+    df_temp = df_temp.resample("H").last().fillna(method="ffill")
+    
+    df_temp.columns = ["temp_min", "temp_max"]
+    df_temp["temp_media"] = df_temp[["temp_min", "temp_max"]].sum(axis=1)/2
+    
+    return df_temp
