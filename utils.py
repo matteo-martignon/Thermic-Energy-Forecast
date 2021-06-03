@@ -114,12 +114,12 @@ def process_PrevisioniTemperatura(df):
 
 def get_data(path):
     '''
-    Carica i dati nei file definiti nella lista datasets, li processa e li unisce in un unico pandas.dataframe.
+    Carica i file contenuti nella cartella path, con nomi definiti nella lista datasets, li processa e li unisce in un unico pandas.dataframe.
     
     Params:
     -------
     path: str
-        Path dove sono i file
+        Path della cartella dove sono i file
     
     Return:
     -------
@@ -173,8 +173,19 @@ def get_soup(url):
 
 def get_temperature_data(path):
     '''
-    Legge un file jason contenete i dati di giorno, temperatura minima e massima.
+    Legge un file json contenete i dati di giorno, temperatura minima e massima.
     Ritorna un pandas.dataframe con DateTimeIndex e colonne temp_min, temp_max, temp_media.
+    
+    Params:
+    -------
+    path: str
+        Path con nome del file
+    
+    Return:
+    -------
+    df_temp: pandas.dataframe
+        Dataframe con colonne temp_min, temp_max, temp_media per ogni ora
+    
     '''
     df_temp = pd.read_json(path, orient = 'index')
     df_temp.index = pd.to_datetime(df_temp.index)

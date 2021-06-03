@@ -1,4 +1,3 @@
-#import pandas as pd
 from utils import get_data, get_temperature_data
 
 df, df_raw = get_data('./data')
