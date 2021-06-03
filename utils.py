@@ -61,6 +61,7 @@ def df_datetimeindex_resampleHmean(df, column):
     '''
     set_datetime_index(df, column)
     return df.resample('H').mean()
+#     return df.resample('H').sum()
 
 def clear_columns(columns):
     '''
@@ -89,6 +90,19 @@ def clear_columns(columns):
     return l
 
 def process_PrevisioniTemperatura(df):
+    '''
+    Processing del dataset PrevisioniTemperatura, quello brutto con molteplici data_emissione_previsione per ogni data_previsione.
+    
+    Params:
+    -------
+    df: pandas.dataframe
+        DataFrame con la struttura e i nomi colonna del file consegnatoci
+    
+    Return:
+    -------
+    df_temp: pandas.dataframe
+        DataFrame pulito contenente una sola riga per ogni data_previsione
+    '''
     df_temp = df.drop(columns=["IdPrevisione","FornitorePrevisioni","DataEmissione"]).melt(id_vars=["DataPrevisione"], 
         var_name="Orarii", 
         value_name="Temperatura")
@@ -120,10 +134,14 @@ def get_data(path):
                   "Previsioni_radiazione": "ORARIO","consuntivi_meteo": "Date-Time"}
     datasets = ["Consuntivo_radiazione","DomandaElettrica","PotenzaTermicaOraria","PrevisioniTemperatura"
                 ,"Previsioni_radiazione","consuntivi_meteo"] 
-
+    
+    #lettura di tutti i file
     for nome in datasets:
         df[nome] = pd.read_csv(f"{path}/{nome}.csv", sep =";", encoding='latin1', decimal = ",", parse_dates=True)
-
+    
+    df_copy = df.copy()
+    
+    #processing di tutti i dataset, tranne PrevisioniTemperatura
     for k, v in dt_columns.items():
         if k=="Previsioni_radiazione":
             df[k][v] = df[k][v].apply(clear_month)
@@ -133,22 +151,31 @@ def get_data(path):
         df[k].columns = df[k].columns + f" ({k})"
         df[k].columns = clear_columns(df[k].columns)
     
+    #processing del dataset PrevisioniTemperatura, quello brutto con molteplici data_emissione_previsione per ogni data_previsione
     df["PrevisioniTemperatura"] = process_PrevisioniTemperatura(df["PrevisioniTemperatura"])
-    df["PrevisioniTemperatura"].columns = df["PrevisioniTemperatura"].columns + " (Previsioni_Temperatura)"
+    df["PrevisioniTemperatura"].columns = df["PrevisioniTemperatura"].columns + " (previsioni_temperatura)"
     df["PrevisioniTemperatura"].columns = clear_columns(df["PrevisioniTemperatura"].columns)
     
+    #merge di tutti i dataframe
     for k in datasets:
         if 'df_merge' not in locals():
             df_merge = df[k]
         else:
             df_merge = df_merge.merge(df[k], how='outer', left_index=True, right_index=True)
-    return df_merge, df
+    return df_merge, df_copy
 
 def get_soup(url):
+    '''
+    Restituisce il contenuto html di una url usando BeautifulSoup.
+    '''
     response = requests.get(url)
     return BeautifulSoup(response.content, features='html.parser')
 
 def get_temperature_data(path):
+    '''
+    Legge un file jason contenete i dati di giorno, temperatura minima e massima.
+    Ritorna un pandas.dataframe con DateTimeIndex e colonne temp_min, temp_max, temp_media.
+    '''
     df_temp = pd.read_json(path, orient = 'index')
     df_temp.index = pd.to_datetime(df_temp.index)
     df_temp = df_temp.resample("H").last().fillna(method="ffill")
