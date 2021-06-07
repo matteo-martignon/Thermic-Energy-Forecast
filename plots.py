@@ -1,6 +1,8 @@
 from sklearn.model_selection import learning_curve, validation_curve
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
+from models import get_forecast_measures
 
 def my_learning_curve(estimator, X_train, y_train, title=None, ylim=None):
     train_sizes, train_scores, test_scores = \
@@ -94,3 +96,7 @@ def my_validation_curve(estimator, X_train, y_train, param_range, title=None, yl
         plt.title(title)
     plt.show()
     return None
+
+def plot_forecast_measure(y_true, y_pred, window=48):
+    d = get_forecast_measures(y_true, y_pred)
+    return pd.DataFrame().from_dict(d, orient = 'index').head(window).plot()

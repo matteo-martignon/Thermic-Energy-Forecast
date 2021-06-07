@@ -1,0 +1,7 @@
+
+1 - La funzione consegnata dovrà effettuare solo la previsione oppure dovrà anche aggiornare il modello con dei nuovi dati consuntivi?
+Quali dati conterranno i file in input alla funzione consegnata?
+Saranno solo dati futuri di test sui cui calcolare le perfomance del modello oppure ci si aspetta che il modello 
+riceva dei nuovi dati con cui aggiornare gli iperparametri del modello?
+
+

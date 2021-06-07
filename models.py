@@ -3,6 +3,10 @@ from tensorflow.keras.preprocessing.sequence import TimeseriesGenerator
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, LSTM
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+from prophet.serialize import model_from_json
+import json
+from joblib import load
+from fbprophet import Prophet
 
 def mean_absolute_percentage_error(y_true, y_pred):
     return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
@@ -80,3 +84,119 @@ def get_forecast_measures(y_true, y_pred):
         d[i] = {"mae" : mean_absolute_error(y_true[:i], y_pred[:i]),
                 "mape" : mean_absolute_percentage_error(y_true[:i], y_pred[:i])}
     return d
+
+def get_model_predictions(train, test, model, window = 24):
+    """
+    Create prediction for RNN model fitted with generator
+    
+    Parameters
+    ----------
+    train : np.array
+        training scaled data
+    test : np.array | pd.DataFrame
+        test data
+    model : keras.model
+        keras RNN model
+    
+    Returns
+    -------
+    list
+        model predictions
+    """
+    y_hat = []
+    batch = train[-window:].reshape((1, window, 1))
+    for i in range(len(test)):
+        # si calcola la previsione 1 mese in avanti 
+        # ([0] è per recuperare il valore numerico al posto dell'intero array)
+        new_pred = model.predict(batch)[0][0]
+        # salvataggio previsioni
+        y_hat.append(new_pred)
+        # aggiornamento batch per includere le previsioni ed eliminare il primo valore
+        batch = np.append(arr=batch[:, 1:, :], values=[[[new_pred]]], axis=1)
+    return y_hat
+
+def stan_init(m):
+    """Retrieve parameters from a trained model.
+    
+    Retrieve parameters from a trained model in the format
+    used to initialize a new Stan model.
+    
+    Parameters
+    ----------
+    m: A trained model of the Prophet class.
+    
+    Returns
+    -------
+    A Dictionary containing retrieved parameters of m.
+    
+    """
+    res = {}
+    for pname in ['k', 'm', 'sigma_obs']:
+        res[pname] = m.params[pname][0][0]
+    for pname in ['delta', 'beta']:
+        res[pname] = m.params[pname][0]
+    return res
+
+def load_prophet_model(path):
+    with open(path, 'r') as fin:
+        model = model_from_json(json.load(fin))
+    return model
+
+def load_scaler(path):
+    return load(path)
+
+def get_model_metrics(y_true, y_pred):
+    '''
+    Params:
+    -------
+    y_true: numpy.array
+    y_pred: numpy.array
+    
+    Returns:
+    --------
+    mae:
+    mape:
+    
+    '''
+    mape = mean_absolute_percentage_error(y_true, y_pred)
+    mae = mean_absolute_error(y_true, y_pred)
+    return mae, mape
+
+def model_add_observations(model, X_train):
+    '''
+    Params:
+    -------
+    model: Prophet model
+        model to update
+    X_train: pandas.dataframe or pandas.series
+        X_train must have 1 column: univariate model
+    
+    Return:
+    -------
+    new_model: Prophet model
+    '''
+    df_train_prophet = X_train.reset_index()
+    df_train_prophet.columns = ['ds', 'y']
+    new_model = Prophet().fit(df_train_prophet, init=stan_init(model))
+    return new_model
+
+def get_prophet_predictions(model, scaler=None, periods=48, freq='H'):
+    future = model.make_future_dataframe(periods=periods, freq=freq, include_history=False)
+    test_predictions = model.predict(future)
+    if scaler is None:
+        return test_predictions['yhat'].values
+    else:
+        return scaler.inverse_transform(test_predictions['yhat'].values)
+    
+def X_train_add_observations(train, observations, scaler=None):
+    X_train = train.copy()
+    X_add = observations.copy()
+    if scaler is None:
+        return X_train.append(X_add)
+    else:
+        X_add.loc[:, :] = scaler.transform(X_add.values)
+        X_train.loc[:, :] = scaler.transform(X_train.values)
+        return X_train.append(X_add)
+        
+def get_y_test_new(X_train_new, df_test, periods=24):
+    return df_test.loc[X_train_new.index[-1]:].iloc[1:periods+1].values
