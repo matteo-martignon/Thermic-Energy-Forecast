@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from tensorflow.keras.preprocessing.sequence import TimeseriesGenerator
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, LSTM
@@ -7,6 +8,7 @@ from prophet.serialize import model_from_json
 import json
 from joblib import load
 from fbprophet import Prophet
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
 def mean_absolute_percentage_error(y_true, y_pred):
     return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
@@ -200,3 +202,57 @@ def X_train_add_observations(train, observations, scaler=None):
         
 def get_y_test_new(X_train_new, df_test, periods=24):
     return df_test.loc[X_train_new.index[-1]:].iloc[1:periods+1].values
+
+
+def get_prophet_predictions_dataframe(model_path, periods=48, scaler=None, results_to_file=False):
+    '''
+    Ritorna un dataframe di predizioni a partire da un file contenente un modello prophet
+    '''
+    model = load_prophet_model(model_path)
+    y_pred = get_prophet_predictions(model=model, periods=periods, scaler=None)
+
+    start = model.history_dates.iloc[-1] + pd.Timedelta(hours=1)
+
+    data = pd.DataFrame(y_pred, index=pd.date_range(start=start, periods=len(y_pred), freq='H'), columns=["predictions"])
+    
+    if results_to_file==True:
+        from datetime import datetime
+        now = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        data.to_csv(f"{now}_predictions.csv")
+        return data
+    else:
+        return data
+
+def get_EXPO_model(X_train):
+    model = ExponentialSmoothing(X_train,
+                            trend="add",
+                            damped_trend=False,
+                            seasonal="add",
+                            seasonal_periods=24,
+                            initialization_method=None,
+                            initial_level=None,
+                            initial_trend=None,
+                            initial_seasonal=None,
+                            use_boxcox=None,
+                            bounds=None,
+                            dates=None,
+                            freq="H",
+                            missing='none')
+    model_fit = model.fit(
+                    smoothing_level=0.5,
+                    smoothing_trend=None,
+                    smoothing_seasonal=0.5,
+                    damping_trend=None,
+                    optimized=True,
+                    remove_bias=False,
+                    start_params=None,
+                    method=None,
+                    minimize_kwargs=None,
+                    use_brute=True,
+                    use_boxcox=None,
+                    use_basinhopping=None,
+                    initial_level=None,
+                    initial_trend=None)
+    return model_fit
+
+

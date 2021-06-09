@@ -195,3 +195,12 @@ def get_temperature_data(path):
     df_temp["temp_media"] = df_temp[["temp_min", "temp_max"]].sum(axis=1)/2
     
     return df_temp
+
+def load_ETRete(path):
+    return pd.read_csv(path, parse_dates=True, dayfirst=True, delimiter=";", index_col="Orario", decimal=",")
+
+def clear_ETRete(df):
+    return df.resample("H").mean().interpolate()
+
+def get_ETRete_clear(path):
+    return clear_ETRete(load_ETRete(path))
